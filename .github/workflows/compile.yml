@@ -27,8 +27,8 @@ jobs:
     - name: Compile Code
       run: |
         cmake --build build
+        ls -R build 
 
-    # 2. NEW STEP: Run the compiled ELF file inside the virtual Cortex-M4 CPU
     - name: Run Simulation in QEMU
       run: |
-        qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -nographic -kernel build/mlkem_stm32.elf
+        qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -nographic -kernel build/*.elf
