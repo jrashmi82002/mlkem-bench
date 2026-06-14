@@ -166,6 +166,15 @@ int main(void) {
         debug_keycheck_verified && (acvp_mode_active == 0 || debug_nist_kat_verified == 1)) {
         debug_acvp_complete_pass = 1;
     }
+    printf("\n=== ML-KEM Benchmarking Results ===\n");
+    printf("Key Gen   : %u cycles\n", (unsigned int)cycles_keygen);
+    printf("Encaps    : %u cycles\n", (unsigned int)cycles_encaps);
+    printf("Decaps    : %u cycles\n", (unsigned int)cycles_decaps);
+    printf("Rejection : %u cycles\n", (unsigned int)cycles_rejection);
+    printf("Total     : %u cycles\n", (unsigned int)cycles_total);
+    printf("Key verified     : %u \n", (unsigned int)debug_keycheck_verified);
+    printf("Decapsulation Result     : %u \n", (unsigned int)debug_decapsulation_match);
+    printf("Final Result     : %u \n", (unsigned int)debug_acvp_complete_pass);
 
     // Clean up background entropy hooks back to normal state
     clear_acvp_mode();
