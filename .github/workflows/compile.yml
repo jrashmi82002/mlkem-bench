@@ -14,11 +14,17 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    # 1. Added qemu-system-arm to the install list
-    - name: Install ARM GCC, Ninja & QEMU Emulator
+    # 1. INSTANT TOOLCHAIN INSTALL
+    - name: Setup ARM GCC Compiler
+      uses: xmake-io/github-action-setup-arm-gcc@v1
+      with:
+        version: '13.2.rel1'
+
+    # 2. Install only the lightweight utilities (CMake, Ninja, and QEMU)
+    - name: Install Build Tools & QEMU Emulator
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi cmake ninja-build qemu-system-arm
+        sudo apt-get install -y cmake ninja-build qemu-system-arm
 
     - name: Configure CMake Project
       run: |
@@ -27,7 +33,7 @@ jobs:
     - name: Compile Code
       run: |
         cmake --build build
-        ls -R build 
+        ls -R build
 
     - name: Run Simulation in QEMU
       run: |
