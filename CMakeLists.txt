@@ -3,6 +3,15 @@ project(MLKEM_STM32_Project C ASM)
 
 set(CMAKE_C_STANDARD 99)
 
+# set TOOLCHAIN_ARM to TRUE if an ARM cross-compiler is detected
+if(CMAKE_C_COMPILER_ID MATCHES "GNU" AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
+    set(TOOLCHAIN_ARM TRUE)
+endif()
+# Also allow it to be passed manually from the command line
+if(CMAKE_TOOLCHAIN_FILE)
+    set(TOOLCHAIN_ARM TRUE)
+endif()
+
 # 1. Grab all source files in Src
 file(GLOB_RECURSE ALL_SOURCES 
     "Src/*.c"
@@ -20,12 +29,11 @@ if(TOOLCHAIN_ARM)
         Startup/startup_stm32f411retx.s
         ${ALL_SOURCES}
     )
+    set_target_properties(mlkem_stm32 PROPERTIES SUFFIX ".elf")
     
     target_include_directories(mlkem_stm32 PRIVATE Inc)
     
     # STM32F411 Cortex-M4 Architecture Flags
-    # Added -DNO_ASM or similar wrapper fallback if needed. 
-    # Often, defining something like PROFILE_HASH or removing assembly overrides works.
     target_compile_options(mlkem_stm32 PRIVATE
         -mcpu=cortex-m4
         -mthumb
@@ -47,9 +55,10 @@ if(TOOLCHAIN_ARM)
     )
     
     # Post-Build Command
+    # 🌟 FIX: Force outputs to drop into the current binary directory explicitly
     add_custom_command(TARGET mlkem_stm32 POST_BUILD
-        COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:mlkem_stm32> mlkem_stm32.hex
-        COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:mlkem_stm32> mlkem_stm32.bin
+        COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:mlkem_stm32> ${CMAKE_CURRENT_BINARY_DIR}/mlkem_stm32.hex
+        COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:mlkem_stm32> ${CMAKE_CURRENT_BINARY_DIR}/mlkem_stm32.bin
         COMMENT "Generated flashable binaries: mlkem_stm32.bin and mlkem_stm32.hex"
     )
 endif()

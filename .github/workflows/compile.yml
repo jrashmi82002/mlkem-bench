@@ -14,27 +14,38 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    # 1. INSTANT TOOLCHAIN INSTALL
-    - name: Setup ARM GCC Compiler
-      uses: xmake-io/github-action-setup-arm-gcc@v1
-      with:
-        version: '13.2.rel1'
-
-    # 2. Install only the lightweight utilities (CMake, Ninja, and QEMU)
-    - name: Install Build Tools & QEMU Emulator
+    # 1. Install system utilities + QEMU simulator emulator
+    - name: Install System Build Tools & QEMU
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake ninja-build qemu-system-arm
+        sudo apt-get install -y cmake ninja-build qemu-system-arm wget tar
 
+    # 2. Download compiler toolchain directly from official Arm servers
+    - name: Download Official Arm GNU Toolchain
+      run: |
+        wget -q https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
+
+    # 3. Extract toolchain archive
+    - name: Extract Arm Toolchain
+      run: |
+        tar -xf arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
+        mv arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi arm-toolchain
+
+    # 4. Configure CMake workspace
     - name: Configure CMake Project
       run: |
+        export PATH="$GITHUB_WORKSPACE/arm-toolchain/bin:$PATH"
         cmake -B build -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="arm-none-eabi.cmake"
 
+    # 5. Compile C/ASM source to build/mlkem_stm32.elf
     - name: Compile Code
       run: |
+        export PATH="$GITHUB_WORKSPACE/arm-toolchain/bin:$PATH"
         cmake --build build
+        echo "=== Verifying all output paths ==="
         ls -R build
 
+    # 6. Run Simulation inside the virtual Cortex-M4 CPU
     - name: Run Simulation in QEMU
       run: |
-        qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -nographic -kernel build/*.elf
+        qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -nographic -kernel build/mlkem_stm32.elf
