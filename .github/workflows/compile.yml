@@ -14,38 +14,34 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    # 1. Install system utilities + QEMU simulator emulator
-    - name: Install System Build Tools & QEMU
+    # 1. Install only the essential, lightweight toolchain packages + QEMU
+    - name: Install ARM GCC Toolchain & QEMU
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake ninja-build qemu-system-arm wget tar
+        sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi cmake ninja-build qemu-system-arm
 
-    # 2. Download compiler toolchain directly from official Arm servers
-    - name: Download Official Arm GNU Toolchain
-      run: |
-        wget -q https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
-
-    # 3. Extract toolchain archive
-    - name: Extract Arm Toolchain
-      run: |
-        tar -xf arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
-        mv arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi arm-toolchain
-
-    # 4. Configure CMake workspace
+    # 2. Configure using your project's build directory naming
     - name: Configure CMake Project
       run: |
-        export PATH="$GITHUB_WORKSPACE/arm-toolchain/bin:$PATH"
-        cmake -B build -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="arm-none-eabi.cmake"
+        cmake -B build_hardware -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="arm-none-eabi.cmake"
 
-    # 5. Compile C/ASM source to build/mlkem_stm32.elf
+    # 3. Compile the code
     - name: Compile Code
       run: |
-        export PATH="$GITHUB_WORKSPACE/arm-toolchain/bin:$PATH"
-        cmake --build build
-        echo "=== Verifying all output paths ==="
-        ls -R build
+        cmake --build build_hardware
+        ls -R build_hardware
 
-    # 6. Run Simulation inside the virtual Cortex-M4 CPU
+    # 4. Upload your flashable files as zip artifacts
+    - name: Upload Flashable Binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: stm32-mlkem-firmware
+        path: |
+          build_hardware/mlkem_stm32.bin
+          build_hardware/mlkem_stm32.hex
+          build_hardware/mlkem_stm32.elf
+
+    # 5. Run the simulation using the newly fixed .elf path
     - name: Run Simulation in QEMU
       run: |
-        qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -nographic -kernel build/mlkem_stm32.elf
+        qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -nographic -kernel build_hardware/mlkem_stm32.elf
