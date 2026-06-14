@@ -1,0 +1,8 @@
+code
+install cmake and arm-none-eabi-gcc fot x64
+write cmake and cmakelists file
+
+run:
+mkdir build_hardware
+cd build_hardware
+cmake -G "MinGW Makefiles" -DCMAKE_TOOLCHAIN_FILE=../arm-none-eabi.cmake ..

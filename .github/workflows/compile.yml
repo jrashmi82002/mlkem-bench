@@ -1,0 +1,36 @@
+name: Cross-Compile STM32 Binary
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-firmware:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install ARM GCC Toolchain & Ninja
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi cmake ninja-build
+
+    - name: Configure CMake Project
+      run: |
+        cmake -B build -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="arm-none-eabi.cmake"
+
+    - name: Compile Code
+      run: |
+        cmake --build build
+
+    - name: Upload Flashable Binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: stm32-mlkem-firmware
+        path: |
+          build/mlkem_stm32.bin
+          build/mlkem_stm32.hex
