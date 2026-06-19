@@ -18,7 +18,7 @@
 
 
 #include <stdint.h>
-#include <stdio.h> // Included for string handling / printf integration
+#include <stdio.h>
 #include <stddef.h>
 #include <string.h>
 

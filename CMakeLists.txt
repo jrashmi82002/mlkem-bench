@@ -51,11 +51,10 @@ if(TOOLCHAIN_ARM)
         -mfpu=fpv4-sp-d16
         -mfloat-abi=hard
         --specs=nano.specs
-        --specs=nosys.specs
+        -lnosys
     )
     
     # Post-Build Command
-    # 🌟 FIX: Force outputs to drop into the current binary directory explicitly
     add_custom_command(TARGET mlkem_stm32 POST_BUILD
         COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:mlkem_stm32> ${CMAKE_CURRENT_BINARY_DIR}/mlkem_stm32.hex
         COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:mlkem_stm32> ${CMAKE_CURRENT_BINARY_DIR}/mlkem_stm32.bin
