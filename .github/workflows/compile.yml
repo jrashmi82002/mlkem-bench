@@ -41,8 +41,7 @@ jobs:
           build_hardware/mlkem_stm32.hex
           build_hardware/mlkem_stm32.elf
 
-    # 5. Run the simulation using the newly fixed .elf path
-    # 5. Run the simulation and cut it off after 5 seconds
+# 5. Run the simulation using the fixed .elf path with clean serial redirection
     - name: Run Simulation in QEMU
       run: |
-        timeout 60s qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -nographic -kernel build_hardware/mlkem_stm32.elf || true
+        timeout 60s qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -nographic -serial stdio -kernel build_hardware/mlkem_stm32.elf || true

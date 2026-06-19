@@ -137,8 +137,14 @@ volatile uint32_t cycles_rejection       = 0;
 volatile uint32_t cycles_total           = 0;
 
 int main(void) {
+    // 1. Fire up the hardware peripheral registers instantly
     ConfigureSystemClock100MHz();
-    ConfigureUSART2(); // Hardware transmission configuration online
+    ConfigureUSART2();
+
+    // Quick structural test: Send an initial heartbeat character immediately
+    while (!(USART2->SR & (1 << 7)))
+        ;
+    USART2->DR = 'A'; // Marker A: System Boot & Clock OK
 
     // Enable CP10/CP11 Full Access for Floating Point Unit (FPU)
     (*(volatile uint32_t*)0xE000ED88) |= ((3UL << 20) | (3UL << 22));
@@ -148,57 +154,62 @@ int main(void) {
     DWT_CYCCNT = 0;
     DWT_CTRL |= (1UL << 0);
 
-    /* ----------------------------------------------------------------- */
-    /* CHOOSE YOUR OPERATION MODE HERE                                   */
-    /* ----------------------------------------------------------------- */
-    use_official_nist_kat_mode(); // Purely handles vector setup in the background
-    /* ----------------------------------------------------------------- */
+    use_official_nist_kat_mode();
 
     uint32_t start_mark;
 
-    // Phase 1 Profile: Keypair Generation (Alice)
+    // Phase 1 Profile: Keypair Generation
     start_mark = DWT_CYCCNT;
     crypto_kem_keypair(global_public_key, global_secret_key);
     cycles_keygen = DWT_CYCCNT - start_mark;
 
-    // Phase 2 Profile: Encapsulation (Bob)
+    while (!(USART2->SR & (1 << 7)))
+        ;
+    USART2->DR = 'B'; // Marker B: Keypair Generation OK
+
+    // Phase 2 Profile: Encapsulation
     start_mark = DWT_CYCCNT;
     crypto_kem_enc(global_ciphertext, global_shared_key_bob, global_public_key);
     cycles_encaps = DWT_CYCCNT - start_mark;
 
-    // Phase 3 Profile: Decapsulation (Alice Standard)
+    while (!(USART2->SR & (1 << 7)))
+        ;
+    USART2->DR = 'C'; // Marker C: Encapsulation OK
+
+    // Phase 3 Profile: Decapsulation
     start_mark = DWT_CYCCNT;
     crypto_kem_dec(global_shared_key_alice, global_ciphertext, global_secret_key);
     cycles_decaps = DWT_CYCCNT - start_mark;
 
+    while (!(USART2->SR & (1 << 7)))
+        ;
+    USART2->DR = 'D'; // Marker D: Decapsulation OK
+
     // Phase 4 Profile: Implicit Rejection Path Assessment
-    global_ciphertext[0] ^= 0xFF; // Force deliberate decryption fault
+    global_ciphertext[0] ^= 0xFF;
     start_mark = DWT_CYCCNT;
     crypto_kem_dec(global_rejection_key, global_ciphertext, global_secret_key);
     cycles_rejection = DWT_CYCCNT - start_mark;
-    global_ciphertext[0] ^= 0xFF; // Revert change
+    global_ciphertext[0] ^= 0xFF;
+
+    while (!(USART2->SR & (1 << 7)))
+        ;
+    USART2->DR = 'E'; // Marker E: Rejection Path OK
 
     // Cumulative Execution Cycle Overhead
     cycles_total = cycles_keygen + cycles_encaps + cycles_decaps + cycles_rejection;
 
-    // Populate tracking view arrays
     memcpy((uint8_t*)view_shared_key_bob,   global_shared_key_bob,   16);
     memcpy((uint8_t*)view_shared_key_alice, global_shared_key_alice, 16);
 
-    // Test 1: Functional Verification (Alice Key == Bob Key)
     if (memcmp(global_shared_key_alice, global_shared_key_bob, CRYPTO_BYTES) == 0) {
         debug_decapsulation_match = 1;
     }
-
-    // Test 2: Implicit Rejection Verification
     if (memcmp(global_rejection_key, global_shared_key_bob, CRYPTO_BYTES) != 0) {
         debug_rejection_verified = 1;
     }
-
-    // Test 3: Public Key Bounds Sanitization Verification
     debug_keycheck_verified = ValidateEncapsulationKey(global_public_key);
 
-    // Test 4: NIST/ACVP Signature Matching
     if (acvp_mode_active) {
         if ((memcmp(global_public_key, nist_gold_pk_start, 2) == 0) &&
             (memcmp(global_ciphertext, nist_gold_ct_start, 2) == 0)) {
@@ -207,63 +218,28 @@ int main(void) {
             debug_nist_kat_verified = 0;
         }
     } else {
-        debug_nist_kat_verified = 2; // N/A
+        debug_nist_kat_verified = 2;
     }
 
-    // Master Evaluation Pass Gate
     if (debug_decapsulation_match && debug_rejection_verified &&
         debug_keycheck_verified && (acvp_mode_active == 0 || debug_nist_kat_verified == 1)) {
         debug_acvp_complete_pass = 1;
     }
 
-    // HARDWARE USART OUTPUT LOGS
+    // Attempting full printouts
     USART2_PrintString("\n=== ML-KEM Benchmarking Results ===\n");
-
-    USART2_PrintString("Key Gen   : ");
-    USART2_PrintUnsigned(cycles_keygen);
-    USART2_PrintString(" cycles\n");
-
-    USART2_PrintString("Encaps    : ");
-    USART2_PrintUnsigned(cycles_encaps);
-    USART2_PrintString(" cycles\n");
-
-    USART2_PrintString("Decaps    : ");
-    USART2_PrintUnsigned(cycles_decaps);
-    USART2_PrintString(" cycles\n");
-
-    USART2_PrintString("Rejection : ");
-    USART2_PrintUnsigned(cycles_rejection);
-    USART2_PrintString(" cycles\n");
-
-    USART2_PrintString("Total     : ");
+    USART2_PrintString("Total Cycles: ");
     USART2_PrintUnsigned(cycles_total);
-    USART2_PrintString(" cycles\n");
-
-    USART2_PrintString("Key verified     : ");
-    USART2_PrintUnsigned(debug_keycheck_verified);
     USART2_PrintString("\n");
 
-    USART2_PrintString("Decapsulation Result     : ");
-    USART2_PrintUnsigned(debug_decapsulation_match);
-    USART2_PrintString("\n");
-
-    USART2_PrintString("Final Result     : ");
-    USART2_PrintUnsigned(debug_acvp_complete_pass);
-    USART2_PrintString("\n");
-
-    // Clean up background entropy hooks back to normal state
     clear_acvp_mode();
 
-    // --- System Status Signaling Output ---
     RCC_AHB1ENR |= (1 << 0); GPIOA_MODER &= ~(3 << 10); GPIOA_MODER |= (1 << 10);
 
-    while (1) {
-        if (debug_acvp_complete_pass == 1) {
-            GPIOA_ODR ^= (1 << 5);
-            for(volatile int i=0; i<30000000; i++) __asm("nop"); // Success slow blink
-        } else {
-            GPIOA_ODR ^= (1 << 5);
-            for(volatile int i=0; i<2000000; i++) __asm("nop");  // Failure rapid flash
-        }
+    while (1)
+    {
+        GPIOA_ODR ^= (1 << 5);
+        for (volatile int i = 0; i < 2000000; i++)
+            __asm("nop");
     }
 }
