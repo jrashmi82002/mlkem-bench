@@ -18,6 +18,7 @@
 
 
 #include <stdint.h>
+#include <stdio.h> // Included for string handling / printf integration
 #include <stddef.h>
 #include <string.h>
 
@@ -28,6 +29,8 @@
 // --- Bare-metal Memory Mapping ---
 #define RCC_BASE          0x40023800
 #define GPIOA_BASE        0x40020000
+#define USART2_BASE 0x40004400 // Hardware base address for USART2
+
 #define RCC_CR            (*(volatile uint32_t*)(RCC_BASE + 0x00))
 #define RCC_PLLCFGR       (*(volatile uint32_t*)(RCC_BASE + 0x04))
 #define RCC_CFGR          (*(volatile uint32_t*)(RCC_BASE + 0x08))
@@ -35,6 +38,7 @@
 #define RCC_APB1ENR       (*(volatile uint32_t*)(RCC_BASE + 0x40))
 #define GPIOA_MODER       (*(volatile uint32_t*)(GPIOA_BASE + 0x00))
 #define GPIOA_ODR         (*(volatile uint32_t*)(GPIOA_BASE + 0x14))
+#define GPIOA_AFRL (*(volatile uint32_t *)(GPIOA_BASE + 0x20)) // Needed for alternate function routing
 #define FLASH_ACR         (*(volatile uint32_t*)(0x40023C00))
 #define PWR_CR            (*(volatile uint32_t*)(0x40007000))
 
@@ -44,6 +48,45 @@
 #define DWT_CYCCNT        (*(volatile uint32_t*)0xE0001004)
 
 #define MODULUS_Q         3329
+
+// --- USART Register Layout Mapping ---
+typedef struct
+{
+    volatile uint32_t SR;  // Status register
+    volatile uint32_t DR;  // Data register
+    volatile uint32_t BRR; // Baud rate register
+    volatile uint32_t CR1; // Control register 1
+} USART_TypeDef;
+
+#define USART2 ((USART_TypeDef *)USART2_BASE)
+
+// Low-level initialization function for USART2 hardware
+void ConfigureUSART2(void)
+{
+    RCC_AHB1ENR |= (1 << 0);            // 1. Enable GPIOA Clock
+    RCC_APB1ENR |= (1 << 17);           // 2. Enable USART2 Clock
+    GPIOA_MODER &= ~(3 << 4);           // 3. Clear existing Pin A2 Mode Configuration
+    GPIOA_MODER |= (2 << 4);            // 4. Configure Pin A2 to Alternate Function Mode
+    GPIOA_AFRL &= ~(0xF << 8);          // 5. Clear Alternate Function lower register for Pin 2
+    GPIOA_AFRL |= (7 << 8);             // 6. Map Pin A2 to AF7 (USART2 TX Line)
+    USART2->BRR = 0x0683;               // 7. Initialize standard serial timing state machine
+    USART2->CR1 = (1 << 13) | (1 << 3); // 8. Globally enable USART Block and Transmitter (UE & TE)
+}
+
+// Low-level system hook overriding printf destination structure
+int _write(int file, char *ptr, int len)
+{
+    for (int i = 0; i < len; i++)
+    {
+        // Wait until the hardware Transmit Data Register is empty (Bit 7: TXE)
+        while (!(USART2->SR & (1 << 7)))
+            ;
+
+        // Feed character raw into the peripheral hardware register
+        USART2->DR = (ptr[i] & 0xFF);
+    }
+    return len;
+}
 
 void ConfigureSystemClock100MHz(void) {
     RCC_APB1ENR |= (1 << 28); PWR_CR |= (3 << 14);
@@ -90,6 +133,7 @@ volatile uint32_t cycles_total           = 0;
 
 int main(void) {
     ConfigureSystemClock100MHz();
+    ConfigureUSART2(); // Activates hardware peripheral lanes
 
     // Enable CP10/CP11 Full Access for Floating Point Unit (FPU)
     (*(volatile uint32_t*)0xE000ED88) |= ((3UL << 20) | (3UL << 22));
@@ -166,6 +210,8 @@ int main(void) {
         debug_keycheck_verified && (acvp_mode_active == 0 || debug_nist_kat_verified == 1)) {
         debug_acvp_complete_pass = 1;
     }
+
+    // Output profiling logs via direct byte serial streaming
     printf("\n=== ML-KEM Benchmarking Results ===\n");
     printf("Key Gen   : %u cycles\n", (unsigned int)cycles_keygen);
     printf("Encaps    : %u cycles\n", (unsigned int)cycles_encaps);
