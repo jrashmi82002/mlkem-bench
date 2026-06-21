@@ -156,9 +156,9 @@ int main(void) {
     ConfigureSystemClock100MHz();
     UART2_Init();
 
-    // printf("\r\n==================================================\r\n");
-    // printf("         STM32F411 PQC ML-KEM BENCHMARK           \r\n");
-    // printf("==================================================\r\n");
+    QEMU_PrintStr("\r\n==================================================\r\n");
+    QEMU_PrintStr("         STM32F411 PQC ML-KEM BENCHMARK           \r\n");
+    QEMU_PrintStr("==================================================\r\n");
 
     (*(volatile uint32_t*)0xE000ED88) |= ((3UL << 20) | (3UL << 22));
 
@@ -217,22 +217,60 @@ int main(void) {
         debug_acvp_complete_pass = 1;
     }
 
+    // --- PRINT FUNCTIONAL VALIDATION RESULTS ---
     QEMU_PrintStr("\r\n[+] FUNCTIONAL VALIDATION RESULTS:\r\n");
-    QEMU_PrintStr("    Decapsulation Match Check : %s\r\n", debug_decapsulation_match ? "PASS" : "FAIL");
-    QEMU_PrintStr("    Implicit Rejection Check  : %s\r\n", debug_rejection_verified ? "PASS" : "FAIL");
-    QEMU_PrintStr("    Key Sanity Bounds Check   : %s\r\n", debug_keycheck_verified ? "PASS" : "FAIL");
-    QEMU_PrintStr("    NIST KAT Vector Match     : %s\r\n", (debug_nist_kat_verified == 1) ? "PASS" : (debug_nist_kat_verified == 0) ? "FAIL"
-                                                                                                                                     : "N/A");
-    QEMU_PrintStr("--------------------------------------------------\r\n");
-    QEMU_PrintStr("[+] PERFORMANCE METRICS (DWT Execution Cycles):\r\n");
-    QEMU_PrintStr("    Keygen Performance        : %lu cycles\r\n", (unsigned long)cycles_keygen);
-    QEMU_PrintStr("    Encapsulation Performance : %lu cycles\r\n", (unsigned long)cycles_encaps);
-    QEMU_PrintStr("    Decapsulation Performance : %lu cycles\r\n", (unsigned long)cycles_decaps);
-    QEMU_PrintStr("    Rejection Performance     : %lu cycles\r\n", (unsigned long)cycles_rejection);
-    QEMU_PrintStr("    Total PQC Core Operation  : %lu cycles\r\n", (unsigned long)cycles_total);
+
+    QEMU_PrintStr("    Decapsulation Match Check : ");
+    QEMU_PrintStr(debug_decapsulation_match ? "PASS\r\n" : "FAIL\r\n");
+
+    QEMU_PrintStr("    Implicit Rejection Check  : ");
+    QEMU_PrintStr(debug_rejection_verified ? "PASS\r\n" : "FAIL\r\n");
+
+    QEMU_PrintStr("    Key Sanity Bounds Check   : ");
+    QEMU_PrintStr(debug_keycheck_verified ? "PASS\r\n" : "FAIL\r\n");
+
+    QEMU_PrintStr("    NIST KAT Vector Match     : ");
+    if (debug_nist_kat_verified == 1)
+    {
+        QEMU_PrintStr("PASS\r\n");
+    }
+    else if (debug_nist_kat_verified == 0)
+    {
+        QEMU_PrintStr("FAIL\r\n");
+    }
+    else
+    {
+        QEMU_PrintStr("N/A\r\n");
+    }
     QEMU_PrintStr("==================================================\r\n");
-    QEMU_PrintStr("    OVERALL TEST STATUS       : %s\r\n", debug_acvp_complete_pass ? "SUCCESS PASS" : "CRITICAL FAILURE");
+
+    // --- PRINT PERFORMANCE METRICS (DWT Execution Cycles) ---
+    char metric_buffer[80]; // Buffer for metric string formatting
+    QEMU_PrintStr("[+] PERFORMANCE METRICS (DWT Execution Cycles):\r\n");
+
+    sprintf(metric_buffer, "    Keygen Performance        : %lu cycles\r\n", (unsigned long)cycles_keygen);
+    QEMU_PrintStr(metric_buffer);
+
+    sprintf(metric_buffer, "    Encapsulation Performance : %lu cycles\r\n", (unsigned long)cycles_encaps);
+    QEMU_PrintStr(metric_buffer);
+
+    sprintf(metric_buffer, "    Decapsulation Performance : %lu cycles\r\n", (unsigned long)cycles_decaps);
+    QEMU_PrintStr(metric_buffer);
+
+    sprintf(metric_buffer, "    Rejection Performance     : %lu cycles\r\n", (unsigned long)cycles_rejection);
+    QEMU_PrintStr(metric_buffer);
+
+    sprintf(metric_buffer, "    Total PQC Core Operation  : %lu cycles\r\n", (unsigned long)cycles_total);
+    QEMU_PrintStr(metric_buffer);
+
+    // --- PRINT OVERALL TEST STATUS ---
+    QEMU_PrintStr("==================================================\r\n");
+    QEMU_PrintStr("    OVERALL TEST STATUS       : ");
+    QEMU_PrintStr(debug_acvp_complete_pass ? "SUCCESS PASS\r\n" : "CRITICAL FAILURE\r\n");
     QEMU_PrintStr("==================================================\r\n\r\n");
+
+    QEMU_PrintStr("    TEST FINISH    \r\n");
+    clear_acvp_mode();
 
     QEMU_PrintStr("    TEST FINISH    \r\n");
     clear_acvp_mode();
