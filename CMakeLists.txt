@@ -4,21 +4,15 @@ project(hello_qemu C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXECUTABLE_SUFFIX ".elf")
 
-# Bare-metal compiler target flags for Cortex-M4
-add_compile_options(
-    -mcpu=cortex-m4
-    -mthumb
-    -O0
-    -Wall
-)
+add_compile_options(-mcpu=cortex-m4 -mthumb -O0 -Wall)
 
-# Custom entry point setup to compile directly without demanding an assembly startup file
+# Tell the linker to put our vector table at the beginning of the file
 add_link_options(
-    -mcpu=cortex-m4
-    -mthumb
-    --specs=nosys.specs
-    -Wl,-e,main
+    -mcpu=cortex-m4 
+    -mthumb 
+    --specs=nano.specs       
+    --specs=nosys.specs 
+    -Wl,--section-start=.isr_vector=0x00000000
 )
 
-# Points explicitly to your folder structure: Src/main.c
 add_executable(mlkem_stm32 Src/main.c)
