@@ -29,4 +29,4 @@ jobs:
 
     - name: Execute in QEMU Simulator
       run: |
-        timeout 10s qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -display none -serial stdio -kernel build_hardware/mlkem_stm32.elf || true
+        timeout 60s qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -display none -serial stdio -kernel build_hardware/mlkem_stm32.elf || true
