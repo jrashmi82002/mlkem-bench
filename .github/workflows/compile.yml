@@ -29,9 +29,10 @@ jobs:
 
     - name: Execute in QEMU Simulator
       run: |
-          qemu-system-arm \
+        qemu-system-arm \
           -M netduinoplus2 \
           -display none \
           -serial stdio \
           -semihosting \
+          -icount shift=0,sleep=off \
           -kernel build_hardware/mlkem_stm32.elf
