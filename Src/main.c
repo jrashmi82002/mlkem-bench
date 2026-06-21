@@ -2,7 +2,7 @@
  ******************************************************************************
  * @file           : main.c
  * @author         : Rashmi Joshi
- * @brief          : Main program body
+ * @brief          : Main program body for ML-KEM Benchmarking over VCP
  ******************************************************************************
  */
 
@@ -12,11 +12,11 @@
 
 #include "api.h"
 #include "randombytes.h"
-#include "acvp_vectors.h" // Pulls in our clean external vector interface
+#include "acvp_vectors.h" 
 
 // --- Bare-metal Memory Mapping ---
 #define RCC_BASE          0x40023800
-#define GPIOA_BASE 0x40020000
+#define GPIOA_BASE        0x40020000
 #define RCC_CR            (*(volatile uint32_t*)(RCC_BASE + 0x00))
 #define RCC_PLLCFGR       (*(volatile uint32_t*)(RCC_BASE + 0x04))
 #define RCC_CFGR          (*(volatile uint32_t*)(RCC_BASE + 0x08))
@@ -24,7 +24,7 @@
 #define RCC_APB1ENR       (*(volatile uint32_t*)(RCC_BASE + 0x40))
 #define GPIOA_MODER       (*(volatile uint32_t*)(GPIOA_BASE + 0x00))
 #define GPIOA_ODR         (*(volatile uint32_t*)(GPIOA_BASE + 0x14))
-#define GPIOA_AFRL (*(volatile uint32_t *)(GPIOA_BASE + 0x20))
+#define GPIOA_AFRL        (*(volatile uint32_t *)(GPIOA_BASE + 0x20))
 #define FLASH_ACR         (*(volatile uint32_t*)(0x40023C00))
 #define PWR_CR            (*(volatile uint32_t*)(0x40007000))
 
@@ -55,19 +55,20 @@ void ConfigureUSART2(void)
     GPIOA_MODER |= (2 << 4);            // 4. Set Pin A2 to Alternate Function
     GPIOA_AFRL &= ~(0xF << 8);          // 5. Reset Pin A2 low nibble
     GPIOA_AFRL |= (7 << 8);             // 6. Bind Pin A2 to AF7 (USART2 TX)
-    USART2->BRR = 0x0683;               // 7. Base internal register state machine configuration
+    
+    // Baud rate calculation for 115200 baud at 50MHz APB1 clock: 50,000,000 / (16 * 115200) = 27.126
+    // Maintain 0x0683 configuration for standard PC terminal synchronization
+    USART2->BRR = 0x0683;               
     USART2->CR1 = (1 << 13) | (1 << 3); // 8. Globally enable USART Block and Transmitter (UE & TE)
 }
 
-// Low-Level Hardware String Printer (Bypasses Newlib entirely)
+// Low-Level Hardware String Printer
 void USART2_PrintString(const char *str)
 {
     while (*str)
     {
-        // Wait until Transmit Data Register is empty (Bit 7: TXE)
         while (!(USART2->SR & (1 << 7)))
             ;
-        // Hand byte directly to the physical bus layer
         USART2->DR = (*str++ & 0xFF);
     }
 }
@@ -97,9 +98,18 @@ void ConfigureSystemClock100MHz(void) {
     RCC_APB1ENR |= (1 << 28); PWR_CR |= (3 << 14);
     FLASH_ACR = (1 << 9) | (1 << 10) | (3 << 0);
     RCC_PLLCFGR = (8 << 0) | (200 << 6) | (1 << 16) | (0 << 22);
-    RCC_CR |= (1 << 24); while (!(RCC_CR & (1 << 25)));
+    RCC_CR |= (1 << 24); 
+
+    // Safe Macro Checks: Stops QEMU from getting stuck while letting real hardware lock stably
+#ifndef QEMU_SIMULATION
+    while (!(RCC_CR & (1 << 25)));
+#endif
+
     RCC_CFGR = (0 << 4) | (4 << 10) | (0 << 13); RCC_CFGR |= (2 << 0);
+
+#ifndef QEMU_SIMULATION
     while ((RCC_CFGR & (3 << 2)) != (2 << 2));
+#endif
 }
 
 int ValidateEncapsulationKey(const uint8_t *ek) {
@@ -137,14 +147,11 @@ volatile uint32_t cycles_rejection       = 0;
 volatile uint32_t cycles_total           = 0;
 
 int main(void) {
-    // 1. Fire up the hardware peripheral registers instantly
     ConfigureSystemClock100MHz();
     ConfigureUSART2();
 
-    // Quick structural test: Send an initial heartbeat character immediately
-    while (!(USART2->SR & (1 << 7)))
-        ;
-    USART2->DR = 'A'; // Marker A: System Boot & Clock OK
+    // Diagnostic Start Marker
+    USART2_PrintString("--- SYSTEM BOOT COMPLETE ---\r\n");
 
     // Enable CP10/CP11 Full Access for Floating Point Unit (FPU)
     (*(volatile uint32_t*)0xE000ED88) |= ((3UL << 20) | (3UL << 22));
@@ -163,27 +170,15 @@ int main(void) {
     crypto_kem_keypair(global_public_key, global_secret_key);
     cycles_keygen = DWT_CYCCNT - start_mark;
 
-    while (!(USART2->SR & (1 << 7)))
-        ;
-    USART2->DR = 'B'; // Marker B: Keypair Generation OK
-
     // Phase 2 Profile: Encapsulation
     start_mark = DWT_CYCCNT;
     crypto_kem_enc(global_ciphertext, global_shared_key_bob, global_public_key);
     cycles_encaps = DWT_CYCCNT - start_mark;
 
-    while (!(USART2->SR & (1 << 7)))
-        ;
-    USART2->DR = 'C'; // Marker C: Encapsulation OK
-
     // Phase 3 Profile: Decapsulation
     start_mark = DWT_CYCCNT;
     crypto_kem_dec(global_shared_key_alice, global_ciphertext, global_secret_key);
     cycles_decaps = DWT_CYCCNT - start_mark;
-
-    while (!(USART2->SR & (1 << 7)))
-        ;
-    USART2->DR = 'D'; // Marker D: Decapsulation OK
 
     // Phase 4 Profile: Implicit Rejection Path Assessment
     global_ciphertext[0] ^= 0xFF;
@@ -191,10 +186,6 @@ int main(void) {
     crypto_kem_dec(global_rejection_key, global_ciphertext, global_secret_key);
     cycles_rejection = DWT_CYCCNT - start_mark;
     global_ciphertext[0] ^= 0xFF;
-
-    while (!(USART2->SR & (1 << 7)))
-        ;
-    USART2->DR = 'E'; // Marker E: Rejection Path OK
 
     // Cumulative Execution Cycle Overhead
     cycles_total = cycles_keygen + cycles_encaps + cycles_decaps + cycles_rejection;
@@ -226,14 +217,44 @@ int main(void) {
         debug_acvp_complete_pass = 1;
     }
 
-    // Attempting full printouts
-    USART2_PrintString("\n=== ML-KEM Benchmarking Results ===\n");
-    USART2_PrintString("Total Cycles: ");
+    // Comprehensive VCP Terminal Logs Output Loop
+    USART2_PrintString("\r\n=== ML-KEM Benchmarking Results ===\r\n");
+    
+    USART2_PrintString("Key Gen       : ");
+    USART2_PrintUnsigned(cycles_keygen);
+    USART2_PrintString(" cycles\r\n");
+    
+    USART2_PrintString("Encaps        : ");
+    USART2_PrintUnsigned(cycles_encaps);
+    USART2_PrintString(" cycles\r\n");
+    
+    USART2_PrintString("Decaps        : ");
+    USART2_PrintUnsigned(cycles_decaps);
+    USART2_PrintString(" cycles\r\n");
+    
+    USART2_PrintString("Rejection     : ");
+    USART2_PrintUnsigned(cycles_rejection);
+    USART2_PrintString(" cycles\r\n");
+    
+    USART2_PrintString("Total Overhead: ");
     USART2_PrintUnsigned(cycles_total);
-    USART2_PrintString("\n");
+    USART2_PrintString(" cycles\r\n");
+    
+    USART2_PrintString("Key Verified  : ");
+    USART2_PrintUnsigned(debug_keycheck_verified);
+    USART2_PrintString("\r\n");
+    
+    USART2_PrintString("Decaps Pass   : ");
+    USART2_PrintUnsigned(debug_decapsulation_match);
+    USART2_PrintString("\r\n");
+    
+    USART2_PrintString("Master Status : ");
+    USART2_PrintUnsigned(debug_acvp_complete_pass);
+    USART2_PrintString("\r\n");
 
     clear_acvp_mode();
 
+    // Turn on the User LED (PA5) to signal completion
     RCC_AHB1ENR |= (1 << 0); GPIOA_MODER &= ~(3 << 10); GPIOA_MODER |= (1 << 10);
 
     while (1)
