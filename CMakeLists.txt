@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
-project(mlkem_stm32 C)
+project(hello_qemu C)
 
 set(CMAKE_C_STANDARD 11)
 
-# Architecture compiler flags for Cortex-M4
+# Bare-metal compile flags
 add_compile_options(
     -mcpu=cortex-m4
     -mthumb
@@ -11,13 +11,12 @@ add_compile_options(
     -Wall
 )
 
-# Linker scripts and flags to generate the bare-metal .elf executable
+# FORCE A GENERIC ENTRY POINT: Bypasses missing Reset_Handler / startup scripts
 add_link_options(
-    -T "${CMAKE_SOURCE_DIR}/STM32F411RETX_FLASH.ld"
     -mcpu=cortex-m4
     -mthumb
     --specs=nosys.specs
-    -Wl,-Map=${PROJECT_NAME}.map,--gc-sections
+    -Wl,-e,main
 )
 
 add_executable(mlkem_stm32 Src/main.c)
