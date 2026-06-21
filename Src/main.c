@@ -145,9 +145,9 @@ int main(void) {
     ConfigureSystemClock100MHz();
     UART2_Init();
 
-    printf("\r\n==================================================\r\n");
-    printf("         STM32F411 PQC ML-KEM BENCHMARK           \r\n");
-    printf("==================================================\r\n");
+    // printf("\r\n==================================================\r\n");
+    // printf("         STM32F411 PQC ML-KEM BENCHMARK           \r\n");
+    // printf("==================================================\r\n");
 
     (*(volatile uint32_t*)0xE000ED88) |= ((3UL << 20) | (3UL << 22));
 
@@ -206,22 +206,22 @@ int main(void) {
         debug_acvp_complete_pass = 1;
     }
 
-    printf("\r\n[+] FUNCTIONAL VALIDATION RESULTS:\r\n");
-    printf("    Decapsulation Match Check : %s\r\n", debug_decapsulation_match ? "PASS" : "FAIL");
-    printf("    Implicit Rejection Check  : %s\r\n", debug_rejection_verified ? "PASS" : "FAIL");
-    printf("    Key Sanity Bounds Check   : %s\r\n", debug_keycheck_verified ? "PASS" : "FAIL");
-    printf("    NIST KAT Vector Match     : %s\r\n", (debug_nist_kat_verified == 1) ? "PASS" : (debug_nist_kat_verified == 0) ? "FAIL"
-                                                                                                                              : "N/A");
-    printf("--------------------------------------------------\r\n");
-    printf("[+] PERFORMANCE METRICS (DWT Execution Cycles):\r\n");
-    printf("    Keygen Performance        : %lu cycles\r\n", (unsigned long)cycles_keygen);
-    printf("    Encapsulation Performance : %lu cycles\r\n", (unsigned long)cycles_encaps);
-    printf("    Decapsulation Performance : %lu cycles\r\n", (unsigned long)cycles_decaps);
-    printf("    Rejection Performance     : %lu cycles\r\n", (unsigned long)cycles_rejection);
-    printf("    Total PQC Core Operation  : %lu cycles\r\n", (unsigned long)cycles_total);
-    printf("==================================================\r\n");
-    printf("    OVERALL TEST STATUS       : %s\r\n", debug_acvp_complete_pass ? "SUCCESS PASS" : "CRITICAL FAILURE");
-    printf("==================================================\r\n\r\n");
+    // printf("\r\n[+] FUNCTIONAL VALIDATION RESULTS:\r\n");
+    // printf("    Decapsulation Match Check : %s\r\n", debug_decapsulation_match ? "PASS" : "FAIL");
+    // printf("    Implicit Rejection Check  : %s\r\n", debug_rejection_verified ? "PASS" : "FAIL");
+    // printf("    Key Sanity Bounds Check   : %s\r\n", debug_keycheck_verified ? "PASS" : "FAIL");
+    // printf("    NIST KAT Vector Match     : %s\r\n", (debug_nist_kat_verified == 1) ? "PASS" : (debug_nist_kat_verified == 0) ? "FAIL"
+    //                                                                                                                           : "N/A");
+    // printf("--------------------------------------------------\r\n");
+    // printf("[+] PERFORMANCE METRICS (DWT Execution Cycles):\r\n");
+    // printf("    Keygen Performance        : %lu cycles\r\n", (unsigned long)cycles_keygen);
+    // printf("    Encapsulation Performance : %lu cycles\r\n", (unsigned long)cycles_encaps);
+    // printf("    Decapsulation Performance : %lu cycles\r\n", (unsigned long)cycles_decaps);
+    // printf("    Rejection Performance     : %lu cycles\r\n", (unsigned long)cycles_rejection);
+    // printf("    Total PQC Core Operation  : %lu cycles\r\n", (unsigned long)cycles_total);
+    // printf("==================================================\r\n");
+    // printf("    OVERALL TEST STATUS       : %s\r\n", debug_acvp_complete_pass ? "SUCCESS PASS" : "CRITICAL FAILURE");
+    // printf("==================================================\r\n\r\n");
 
     UART2_PrintStr("    TEST FINISH    \r\n");
     clear_acvp_mode();
