@@ -83,6 +83,17 @@ void UART2_PrintStr(const char *str)
     }
 }
 
+void QEMU_PrintStr(const char *str)
+{
+    while (*str)
+    {
+        register uint32_t r0 __asm__("r0") = 0x03;          // SYS_WRITEC register code
+        register uint32_t r1 __asm__("r1") = (uint32_t)str; // Pointer to the character byte
+        __asm__ volatile("bkpt 0xAB" : : "r"(r0), "r"(r1) : "memory");
+        str++;
+    }
+}
+
 void QEMU_Exit(int status_code)
 {
     register uint32_t r0 __asm__("r0") = 0x18;
@@ -223,7 +234,7 @@ int main(void) {
     // printf("    OVERALL TEST STATUS       : %s\r\n", debug_acvp_complete_pass ? "SUCCESS PASS" : "CRITICAL FAILURE");
     // printf("==================================================\r\n\r\n");
 
-    UART2_PrintStr("    TEST FINISH    \r\n");
+    QEMU_PrintStr("    TEST FINISH    \r\n");
     clear_acvp_mode();
 
 #ifdef EMULATION
