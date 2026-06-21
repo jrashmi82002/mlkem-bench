@@ -32,6 +32,6 @@ jobs:
         qemu-system-arm \
           -M netduinoplus2 \
           -nographic \
-          -serial mon:stdio \
+          -serial stdio \
           -semihosting \
           -kernel build_hardware/mlkem_stm32.elf
