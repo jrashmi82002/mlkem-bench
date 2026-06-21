@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"D:/Documents/stm32/open_Source/githubRepo/mlkem-bench/build_hardware/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
