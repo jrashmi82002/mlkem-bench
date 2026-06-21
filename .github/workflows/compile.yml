@@ -21,7 +21,7 @@ jobs:
 
     - name: Configure CMake
       run: |
-        cmake -B build_hardware -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="arm-none-eabi.cmake"
+        cmake -B build_hardware -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="arm-none-eabi.cmake" -DTOOLCHAIN_ARM=ON
 
     - name: Build Binary
       run: |
@@ -29,4 +29,9 @@ jobs:
 
     - name: Execute in QEMU Simulator
       run: |
-        timeout 30s qemu-system-arm -M netduinoplus2 -nographic -serial mon:stdio -kernel build_hardware/mlkem_stm32.elf
+        qemu-system-arm \
+          -M netduinoplus2 \
+          -nographic \
+          -serial mon:stdio \
+          -semihosting \
+          -kernel build_hardware/mlkem_stm32.elf
