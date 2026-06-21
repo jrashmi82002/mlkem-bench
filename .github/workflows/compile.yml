@@ -34,5 +34,6 @@ jobs:
           -display none \
           -serial stdio \
           -semihosting \
-          -icount shift=0,sleep=off \
+          -plugin /usr/lib/x86_64-linux-gnu/qemu/libinsn.so \
+          -d plugin \
           -kernel build_hardware/mlkem_stm32.elf
