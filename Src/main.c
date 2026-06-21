@@ -72,6 +72,17 @@ int _write(int file, char *ptr, int len)
     return len;
 }
 
+void UART2_PrintStr(const char *str)
+{
+    while (*str)
+    {
+        // Wait for TXE (Transmit data register empty)
+        while (!(USART2_SR & (1 << 7)))
+            ;
+        USART2_DR = *str++;
+    }
+}
+
 void QEMU_Exit(int status_code)
 {
     register uint32_t r0 __asm__("r0") = 0x18;
@@ -212,6 +223,7 @@ int main(void) {
     printf("    OVERALL TEST STATUS       : %s\r\n", debug_acvp_complete_pass ? "SUCCESS PASS" : "CRITICAL FAILURE");
     printf("==================================================\r\n\r\n");
 
+    UART2_PrintStr("    TEST FINISH    \r\n");
     clear_acvp_mode();
 
 #ifdef EMULATION
