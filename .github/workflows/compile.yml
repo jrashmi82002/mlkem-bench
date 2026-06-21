@@ -20,10 +20,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi cmake ninja-build qemu-system-arm
 
-    # 2. Configure using your project's build directory naming
+    # 2. Configure using your project's build directory naming + INJECT DEFINE FLAG
     - name: Configure CMake Project
       run: |
-        cmake -B build_hardware -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="arm-none-eabi.cmake"
+        cmake -B build_hardware -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="arm-none-eabi.cmake" -DCMAKE_C_FLAGS="-DQEMU_SIMULATION"
 
     # 3. Compile the code
     - name: Compile Code
@@ -41,7 +41,7 @@ jobs:
           build_hardware/mlkem_stm32.hex
           build_hardware/mlkem_stm32.elf
 
-    # 5. Run the simulation using multiplexed stdio routing
+    # 5. Run the simulation using clean serial redirection mapping
     - name: Run Simulation in QEMU
       run: |
-        timeout 60s qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -nographic -serial mon:stdio -kernel build_hardware/mlkem_stm32.elf || true
+        timeout 60s qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -display none -serial stdio -kernel build_hardware/mlkem_stm32.elf || true
