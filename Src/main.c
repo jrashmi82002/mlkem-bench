@@ -1,45 +1,28 @@
+#include <stdio.h>
 #include <stdint.h>
-#include <sys/types.h>
 
-// --- Bare-metal Memory Mapping ---
-#define RCC_AHB1ENR       (*(volatile uint32_t*)(0x40023800 + 0x30))
-#define RCC_APB1ENR       (*(volatile uint32_t*)(0x40023800 + 0x40))
-#define GPIOA_MODER       (*(volatile uint32_t*)(0x40020000 + 0x00))
-#define GPIOA_AFRL        (*(volatile uint32_t*)(0x40020000 + 0x20))
+// Memory map for USART2 data register
+#define USART2_DR (*(volatile uint32_t *)(0x40004400 + 0x04))
 
-typedef struct {
-    volatile uint32_t SR;
-    volatile uint32_t DR;
-    volatile uint32_t BRR;
-    volatile uint32_t CR1;
-} USART_TypeDef;
+// Minimal stack definition
+static uint32_t stack[1024];
 
-#define USART2 ((USART_TypeDef *)0x40004400)
-
-// --- Explicit Target Prototypes ---
-int main(void);
 void Reset_Handler(void);
-void ConfigureUSART2(void);
-void USART2_PrintString(const char *str);
 
-// --- Mandatory Newlib System Stubs to Silence ALL Linker Warnings ---
-int _close(int file) { return -1; }
-int _fstat(int file, void *st) { return 0; }
-int _isatty(int file) { return 1; }
-int _lseek(int file, int ptr, int dir) { return 0; }
-int _read(int file, char *ptr, int len) { return 0; }
-caddr_t _sbrk(int incr) { return (caddr_t)-1; }
+// Clean vector table aligned by the linker script
+__attribute__((section(".isr_vector"), used)) void (*const vectors[])(void) = {
+    (void (*)(void))(&stack[1024]),
+    Reset_Handler};
+
+// Wiring printf directly into QEMU's simulated console channel
 int _write(int file, char *ptr, int len)
 {
     for (int i = 0; i < len; i++)
     {
-        USART2->DR = (ptr[i] & 0xFF);
+        USART2_DR = (ptr[i] & 0xFF);
     }
     return len;
 }
-
-// --- Minimal Stack & ARM Vector Table Configuration ---
-static uint32_t stack[256];
 
 void Reset_Handler(void)
 {
@@ -48,35 +31,11 @@ void Reset_Handler(void)
         ;
 }
 
-__attribute__((section(".isr_vector"), used)) void (*const vectors[])(void) = {
-    (void (*)(void))(&stack[256]),
-    Reset_Handler};
-
-// --- Peripherals & Core Routine Execution ---
-void ConfigureUSART2(void) {
-    RCC_AHB1ENR |= (1 << 0);            
-    RCC_APB1ENR |= (1 << 17);           
-    GPIOA_MODER &= ~(3 << 4);           
-    GPIOA_MODER |= (2 << 4);            
-    GPIOA_AFRL &= ~(0xF << 8);          
-    GPIOA_AFRL |= (7 << 8);             
-    USART2->BRR = 0x0683;               
-    USART2->CR1 = (1 << 13) | (1 << 3); 
-}
-
-void USART2_PrintString(const char *str) {
-    while (*str)
-    {
-        USART2->DR = (*str++ & 0xFF);
-    }
-}
-
 int main(void) {
-    ConfigureUSART2();
-
-    for (int i = 0; i < 20; i++)
+    // No messy loops or register setups needed. QEMU handles printf immediately!
+    for (int i = 0; i < 10; i++)
     {
-        USART2_PrintString("Hello from QEMU!\r\n");
+        printf("Hello from QEMU! ML-KEM Benchmarking Environment Online.\r\n");
     }
 
     while (1) {
