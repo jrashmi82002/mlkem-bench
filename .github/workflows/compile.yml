@@ -1,4 +1,4 @@
-name: Cross-Compile & Simulate STM32 Binary
+name: Simple QEMU Print Test
 
 on:
   push:
@@ -7,41 +7,26 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-simulate:
+  test-print:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    # 1. Install only the essential, lightweight toolchain packages + QEMU
-    - name: Install ARM GCC Toolchain & QEMU
+    - name: Install Toolchain & QEMU
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi cmake ninja-build qemu-system-arm
+        sudo apt-get install -y gcc-arm-none-eabi cmake ninja-build qemu-system-arm
 
-    # 2. Configure using your project's build directory naming + INJECT DEFINE FLAG
-    - name: Configure CMake Project
+    - name: Configure CMake
       run: |
-        cmake -B build_hardware -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="arm-none-eabi.cmake" -DCMAKE_C_FLAGS="-DQEMU_SIMULATION"
+        cmake -B build_hardware -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="arm-none-eabi.cmake"
 
-    # 3. Compile the code
-    - name: Compile Code
+    - name: Build Binary
       run: |
         cmake --build build_hardware
-        ls -R build_hardware
 
-    # 4. Upload your flashable files as zip artifacts
-    - name: Upload Flashable Binaries
-      uses: actions/upload-artifact@v4
-      with:
-        name: stm32-mlkem-firmware
-        path: |
-          build_hardware/mlkem_stm32.bin
-          build_hardware/mlkem_stm32.hex
-          build_hardware/mlkem_stm32.elf
-
-    # 5. Run the simulation using clean serial redirection mapping
-    - name: Run Simulation in QEMU
+    - name: Execute in QEMU Simulator
       run: |
-        timeout 60s qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -display none -serial stdio -kernel build_hardware/mlkem_stm32.elf || true
+        timeout 10s qemu-system-arm -M netduinoplus2 -cpu cortex-m4 -display none -serial stdio -kernel build_hardware/mlkem_stm32.elf || true
