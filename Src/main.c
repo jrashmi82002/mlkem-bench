@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <sys/types.h>
 
 #define RCC_AHB1ENR (*(volatile uint32_t *)(0x40023800 + 0x30))
 #define RCC_APB1ENR (*(volatile uint32_t *)(0x40023800 + 0x40))
@@ -37,13 +38,33 @@ void USART2_PrintString(const char *str)
     }
 }
 
-// Named 'main' but acting as direct hardware entry point via our linker flag
+// Minimal bare-metal OS system stubs to make newlib link perfectly
+int _close(int file) { return -1; }
+int _fstat(int file, void *st) { return 0; }
+int _isatty(int file) { return 1; }
+int _lseek(int file, int ptr, int dir) { return 0; }
+int _read(int file, char *ptr, int len) { return 0; }
+caddr_t _sbrk(int incr)
+{
+    static char *heap_end;
+    return (caddr_t)-1;
+}
+int _write(int file, char *ptr, int len)
+{
+    for (int i = 0; i < len; i++)
+    {
+        while (!(USART2->SR & (1 << 7)))
+            ;
+        USART2->DR = (ptr[i] & 0xFF);
+    }
+    return len;
+}
+
 int main(void)
 {
     ConfigureUSART2();
 
-    // Send standard data bursts to the QEMU engine pipe
-    for (int i = 0; i < 20; i++)
+    for (int i = 0; i < 10; i++)
     {
         USART2_PrintString("Hello from QEMU!\r\n");
     }
