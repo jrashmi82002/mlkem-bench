@@ -40,6 +40,8 @@ if(TOOLCHAIN_ARM)
         -mfpu=fpv4-sp-d16
         -mfloat-abi=hard
         --specs=nano.specs
+        --specs=nosys.specs
+        -Wl,--gc-sections
     )
     
     add_custom_command(TARGET mlkem_stm32 POST_BUILD
