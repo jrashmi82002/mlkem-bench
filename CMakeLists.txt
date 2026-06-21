@@ -20,4 +20,4 @@ add_link_options(
     -Wl,-Map=${PROJECT_NAME}.map,--gc-sections
 )
 
-add_executable(mlkem_stm32 src/main.c)
+add_executable(mlkem_stm32 Src/main.c)
