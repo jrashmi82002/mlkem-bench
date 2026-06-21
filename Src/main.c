@@ -43,6 +43,11 @@
 #define DWT_CTRL          (*(volatile uint32_t*)0xE0001000)
 #define DWT_CYCCNT        (*(volatile uint32_t*)0xE0001004)
 
+// --- SysTick Counter Hardware Registers ---
+#define SYSTICK_LOAD (*(volatile uint32_t *)0xE000E104)
+#define SYSTICK_VAL (*(volatile uint32_t *)0xE000E108)
+#define SYSTICK_CTRL (*(volatile uint32_t *)0xE000E10C)
+
 #define MODULUS_Q         3329
 
 void UART2_Init(void)
@@ -72,23 +77,13 @@ int _write(int file, char *ptr, int len)
     return len;
 }
 
-void UART2_PrintStr(const char *str)
-{
-    while (*str)
-    {
-        // Wait for TXE (Transmit data register empty)
-        while (!(USART2_SR & (1 << 7)))
-            ;
-        USART2_DR = *str++;
-    }
-}
-
+#ifdef EMULATION
 void QEMU_PrintStr(const char *str)
 {
     while (*str)
     {
-        register uint32_t r0 __asm__("r0") = 0x03;          // SYS_WRITEC register code
-        register uint32_t r1 __asm__("r1") = (uint32_t)str; // Pointer to the character byte
+        register uint32_t r0 __asm__("r0") = 0x03;          // SYS_WRITEC code
+        register uint32_t r1 __asm__("r1") = (uint32_t)str; // Pointer to byte
         __asm__ volatile("bkpt 0xAB" : : "r"(r0), "r"(r1) : "memory");
         str++;
     }
@@ -100,6 +95,7 @@ void QEMU_Exit(int status_code)
     register uint32_t r1 __asm__("r1") = (status_code == 0) ? 0x20026 : 0x20024;
     __asm__ volatile("bkpt 0xAB" : : "r"(r0), "r"(r1) : "memory");
 }
+#endif
 
 void ConfigureSystemClock100MHz(void) {
 #ifdef EMULATION
@@ -156,20 +152,59 @@ int main(void) {
     ConfigureSystemClock100MHz();
     UART2_Init();
 
+#ifdef EMULATION
     QEMU_PrintStr("\r\n==================================================\r\n");
     QEMU_PrintStr("         STM32F411 PQC ML-KEM BENCHMARK           \r\n");
     QEMU_PrintStr("==================================================\r\n");
+#else
+    printf("\r\n==================================================\r\n");
+    printf("         STM32F411 PQC ML-KEM BENCHMARK           \r\n");
+    printf("==================================================\r\n");
+#endif
 
+    // Enable Coprocessor Access (FPU Entry)
     (*(volatile uint32_t*)0xE000ED88) |= ((3UL << 20) | (3UL << 22));
 
+#ifdef EMULATION
+    // Initialize SysTick counter to measure cycles deterministically inside QEMU
+    SYSTICK_LOAD = 0x00FFFFFF;
+    SYSTICK_VAL = 0;
+    SYSTICK_CTRL = 0x00000005; // Clock source processor, enable counter
+#else
+    // Initialize DWT hardware cycle counter for physical board operation
     CoreDebug_DEMCR |= (1UL << 24);
     DWT_CYCCNT = 0;
     DWT_CTRL |= (1UL << 0);
+#endif
 
     use_official_nist_kat_mode();
 
     uint32_t start_mark;
 
+#ifdef EMULATION
+    // --- KEY GENERATION PHASE (QEMU) ---
+    start_mark = SYSTICK_VAL;
+    crypto_kem_keypair(global_public_key, global_secret_key);
+    cycles_keygen = start_mark - SYSTICK_VAL;
+
+    // --- ENCAPSULATION PHASE (QEMU) ---
+    start_mark = SYSTICK_VAL;
+    crypto_kem_enc(global_ciphertext, global_shared_key_bob, global_public_key);
+    cycles_encaps = start_mark - SYSTICK_VAL;
+
+    // --- DECAPSULATION PHASE (QEMU) ---
+    start_mark = SYSTICK_VAL;
+    crypto_kem_dec(global_shared_key_alice, global_ciphertext, global_secret_key);
+    cycles_decaps = start_mark - SYSTICK_VAL;
+
+    // --- IMPLICIT REJECTION PHASE (QEMU) ---
+    global_ciphertext[0] ^= 0xFF;
+    start_mark = SYSTICK_VAL;
+    crypto_kem_dec(global_rejection_key, global_ciphertext, global_secret_key);
+    cycles_rejection = start_mark - SYSTICK_VAL;
+    global_ciphertext[0] ^= 0xFF;
+#else
+    // --- CRYPTO PHASES (Hardware DWT Execution) ---
     start_mark = DWT_CYCCNT;
     crypto_kem_keypair(global_public_key, global_secret_key);
     cycles_keygen = DWT_CYCCNT - start_mark;
@@ -187,6 +222,7 @@ int main(void) {
     crypto_kem_dec(global_rejection_key, global_ciphertext, global_secret_key);
     cycles_rejection = DWT_CYCCNT - start_mark;
     global_ciphertext[0] ^= 0xFF;
+#endif
 
     cycles_total = cycles_keygen + cycles_encaps + cycles_decaps + cycles_rejection;
 
@@ -217,7 +253,8 @@ int main(void) {
         debug_acvp_complete_pass = 1;
     }
 
-    // --- PRINT FUNCTIONAL VALIDATION RESULTS ---
+#ifdef EMULATION
+    // --- DISPLAY INTERFACE OUT THROUGH QEMU SEMIHOSTING ---
     QEMU_PrintStr("\r\n[+] FUNCTIONAL VALIDATION RESULTS:\r\n");
 
     QEMU_PrintStr("    Decapsulation Match Check : ");
@@ -231,22 +268,16 @@ int main(void) {
 
     QEMU_PrintStr("    NIST KAT Vector Match     : ");
     if (debug_nist_kat_verified == 1)
-    {
         QEMU_PrintStr("PASS\r\n");
-    }
     else if (debug_nist_kat_verified == 0)
-    {
         QEMU_PrintStr("FAIL\r\n");
-    }
     else
-    {
         QEMU_PrintStr("N/A\r\n");
-    }
+
     QEMU_PrintStr("==================================================\r\n");
 
-    // --- PRINT PERFORMANCE METRICS (DWT Execution Cycles) ---
-    char metric_buffer[80]; // Buffer for metric string formatting
-    QEMU_PrintStr("[+] PERFORMANCE METRICS (DWT Execution Cycles):\r\n");
+    char metric_buffer[80];
+    QEMU_PrintStr("[+] PERFORMANCE METRICS (Instruction Execution Cycles):\r\n");
 
     sprintf(metric_buffer, "    Keygen Performance        : %lu cycles\r\n", (unsigned long)cycles_keygen);
     QEMU_PrintStr(metric_buffer);
@@ -263,22 +294,39 @@ int main(void) {
     sprintf(metric_buffer, "    Total PQC Core Operation  : %lu cycles\r\n", (unsigned long)cycles_total);
     QEMU_PrintStr(metric_buffer);
 
-    // --- PRINT OVERALL TEST STATUS ---
     QEMU_PrintStr("==================================================\r\n");
     QEMU_PrintStr("    OVERALL TEST STATUS       : ");
     QEMU_PrintStr(debug_acvp_complete_pass ? "SUCCESS PASS\r\n" : "CRITICAL FAILURE\r\n");
     QEMU_PrintStr("==================================================\r\n\r\n");
-
     QEMU_PrintStr("    TEST FINISH    \r\n");
-    clear_acvp_mode();
+#else
+    // --- DISPLAY INTERFACE OUT THROUGH STANDARD HARDWARE UART ---
+    printf("\r\n[+] FUNCTIONAL VALIDATION RESULTS:\r\n");
+    printf("    Decapsulation Match Check : %s\r\n", debug_decapsulation_match ? "PASS" : "FAIL");
+    printf("    Implicit Rejection Check  : %s\r\n", debug_rejection_verified ? "PASS" : "FAIL");
+    printf("    Key Sanity Bounds Check   : %s\r\n", debug_keycheck_verified ? "PASS" : "FAIL");
+    printf("    NIST KAT Vector Match     : %s\r\n", (debug_nist_kat_verified == 1) ? "PASS" : (debug_nist_kat_verified == 0) ? "FAIL"
+                                                                                                                              : "N/A");
+    printf("--------------------------------------------------\r\n");
+    printf("[+] PERFORMANCE METRICS (DWT Execution Cycles):\r\n");
+    printf("    Keygen Performance        : %lu cycles\r\n", (unsigned long)cycles_keygen);
+    printf("    Encapsulation Performance : %lu cycles\r\n", (unsigned long)cycles_encaps);
+    printf("    Decapsulation Performance : %lu cycles\r\n", (unsigned long)cycles_decaps);
+    printf("    Rejection Performance     : %lu cycles\r\n", (unsigned long)cycles_rejection);
+    printf("    Total PQC Core Operation  : %lu cycles\r\n", (unsigned long)cycles_total);
+    printf("==================================================\r\n");
+    printf("    OVERALL TEST STATUS       : %s\r\n", debug_acvp_complete_pass ? "SUCCESS PASS" : "CRITICAL FAILURE");
+    printf("==================================================\r\n\r\n");
+    printf("    TEST FINISH    \r\n");
+#endif
 
-    QEMU_PrintStr("    TEST FINISH    \r\n");
     clear_acvp_mode();
 
 #ifdef EMULATION
     QEMU_Exit(debug_acvp_complete_pass == 1 ? 0 : 1);
 #endif
 
+    // Physical board execution fall-through (Infinite LED Blink Status)
     RCC_AHB1ENR |= (1 << 0);
     GPIOA_MODER &= ~(3 << 10);
     GPIOA_MODER |= (1 << 10);
