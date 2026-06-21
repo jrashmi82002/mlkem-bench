@@ -1,4 +1,4 @@
-name: Build and Simulate STM32 ML-KEM
+name: Simple QEMU Print Test
 
 on:
   push:
@@ -7,46 +7,38 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  test-print:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Install ARM GNU Toolchain
+    - name: Install Toolchain & QEMU with Plugins
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi build-essential
+        sudo apt-get install -y gcc-arm-none-eabi cmake ninja-build qemu-system-arm qemu-system-common
 
-    - name: Install QEMU with Plugin Support
+    - name: Configure CMake
       run: |
-        sudo apt-get update
-        sudo apt-get install -y qemu-system-arm qemu-utils
+        cmake -B build_hardware -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="arm-none-eabi.cmake" -DTOOLCHAIN_ARM=ON
 
-    - name: Configure and Build (CMake)
+    - name: Build Binary
       run: |
-        mkdir -p build_hardware
-        cd build_hardware
-        # Passing -DEMULATION ensures preprocessor switches are active in main.c
-        cmake -DCMAKE_TOOLCHAIN_FILE=../toolchain.cmake -DCOMPILE_TARGET=EMULATION ..
-        make -j$(nproc) mlkem_stm32.elf
+        cmake --build build_hardware
 
     - name: Execute in QEMU Simulator
       run: |
-        # 1. Dynamically locate the instruction tracking plugin on the runner
-        PLUGIN_PATH=$(find /usr/lib -name "libinsn.so" 2>/dev/null | head -n 1)
-        
+        # 1. Look for the instruction tracking plugin
+        PLUGIN_PATH=$(find /usr -name "libinsn.so" 2>/dev/null | head -n 1)
         if [ -z "$PLUGIN_PATH" ]; then
-          echo "[-] Warning: libinsn.so not found in standard /usr/lib directory. Searching system-wide..."
+          echo "[-] Warning: libinsn.so not found in /usr. Searching system-wide..."
           PLUGIN_PATH=$(find / -name "libinsn.so" 2>/dev/null | head -n 1)
         fi
-
-        # 2. Execution Routing Logic Based on Plugin Presence
+        
+        # 2. Check if plugin was found and route execution safely
         if [ -n "$PLUGIN_PATH" ]; then
-          echo "[+] Success: Found QEMU Instruction Plugin at: $PLUGIN_PATH"
-          echo "[+] Running execution simulation WITH instruction benchmarking metrics..."
-          
+          echo "[+] Found QEMU Instruction Plugin at: $PLUGIN_PATH"
           qemu-system-arm \
             -M netduinoplus2 \
             -display none \
@@ -56,9 +48,7 @@ jobs:
             -d plugin \
             -kernel build_hardware/mlkem_stm32.elf
         else
-          echo "[!] GRACEFUL FALLBACK: QEMU instrumentation plugin was not found on this machine image."
-          echo "[!] Running standard simulation. Functional validation table will output below."
-          
+          echo "[!] GRACEFUL FALLBACK: Plugin not found even after installing common tools. Running standard simulation..."
           qemu-system-arm \
             -M netduinoplus2 \
             -display none \
